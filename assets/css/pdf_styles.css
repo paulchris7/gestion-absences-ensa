@@ -1,0 +1,198 @@
+/* Styles de base */
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #333;
+    line-height: 1.5;
+    margin: 0;
+    padding: 15pt;
+    font-size: 10pt;
+}
+
+/* En-tête avec table pour meilleur support PDF */
+.header-table {
+    margin-bottom: 15pt;
+    border-bottom: 1.5pt solid #1a3e72;
+    width: 100%;
+}
+
+.header-text {
+    text-align: center;
+    padding: 0 10pt;
+}
+
+.university-name {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #1a3e72;
+    margin-bottom: 3pt;
+}
+
+.school-name {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #d52b1e;
+    margin-bottom: 3pt;
+}
+
+.department {
+    font-size: 9pt;
+    color: #555;
+}
+
+/* Titre */
+.report-title {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    color: #1a3e72;
+    margin: 15pt 0;
+    padding: 5pt 0;
+    border-top: 1pt solid #eee;
+    border-bottom: 1pt solid #eee;
+}
+
+/* Métadonnées */
+.report-meta {
+    display: table;
+    width: 100%;
+    margin-bottom: 15pt;
+    font-size: 9pt;
+}
+
+.meta-item {
+    display: table-cell;
+    padding: 0 5pt;
+}
+
+.meta-label {
+    font-weight: bold;
+    margin-right: 5pt;
+    color: #555;
+}
+
+/* Statistiques en tableau */
+.stats-table {
+    margin: 15pt 0;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.stats-table td {
+    text-align: center;
+    padding: 8pt;
+    border-radius: 4pt;
+}
+
+.stat-card.total {
+    background-color: #f8f9fa;
+    border: 1pt solid #ddd;
+}
+
+.stat-card.justified {
+    background-color: #e6f7ee;
+    border: 1pt solid #28a745;
+}
+
+.stat-card.unjustified {
+    background-color: #fce8e6;
+    border: 1pt solid #dc3545;
+}
+
+.stat-card.rate {
+    background-color: #e7f5fe;
+    border: 1pt solid #17a2b8;
+}
+
+.stat-value {
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+.stat-label {
+    font-size: 8pt;
+    margin-top: 3pt;
+}
+
+/* Tableau des absences */
+.absence-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10pt 0;
+    font-size: 9pt;
+}
+
+.absence-table th {
+    background-color: #1a3e72;
+    color: white;
+    padding: 6pt;
+    text-align: left;
+    font-weight: bold;
+}
+
+.absence-table td {
+    padding: 6pt;
+    border-bottom: 0.5pt solid #ddd;
+}
+
+.absence-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Statuts */
+.status-cell {
+    font-weight: bold;
+}
+
+.justified {
+    color: #28a745;
+}
+
+.unjustified {
+    color: #dc3545;
+}
+
+/* Notes */
+.notes {
+    margin: 15pt 0;
+    padding: 8pt;
+    background-color: #f8f9fa;
+    border-left: 3pt solid #6c757d;
+    font-size: 8pt;
+}
+
+.notes h3 {
+    margin-top: 0;
+    color: #1a3e72;
+    font-size: 9pt;
+}
+
+/* Signatures */
+.signatures {
+    margin-top: 30pt;
+}
+
+.signature-line {
+    height: 1pt;
+    border-bottom: 1pt solid #333;
+    margin: 0 auto 5pt;
+    width: 80%;
+}
+
+.signature-label {
+    font-size: 8pt;
+    color: #555;
+    text-align: center;
+}
+
+/* Pied de page */
+.footer {
+    margin-top: 20pt;
+    padding-top: 5pt;
+    border-top: 0.5pt solid #ddd;
+    font-size: 7pt;
+    color: #777;
+}
