@@ -150,10 +150,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             try {
                                 // Paramètres serveur SMTP
                                 $mail->isSMTP();
-                                $mail->Host       = 'smtp.gmail.com'; // ou autre : smtp.tonhebergeur.com
+                                $mail->Host       = 'smtp.gmail.com';
                                 $mail->SMTPAuth   = true;
-                                $mail->Username   = 'paulchristaimeslg3@gmail.com'; // ton e-mail
-                                $mail->Password   = 'qgzr zqvu rane yyvf'; // ton mot de passe ou mot de passe d'application
+                                $mail->Username   = ''; 
+                                $mail->Password   = ''; 
                                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                                 $mail->Port       = 587;
 
