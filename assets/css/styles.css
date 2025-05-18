@@ -400,6 +400,10 @@
     gap: 8px;
   }
   
+  .table-actions a {
+    margin-right: 8px; /* Ajout d'une marge entre les boutons */
+  }
+  
   .badge {
     display: inline-block;
     padding: 4px 8px;
@@ -608,6 +612,7 @@
     opacity: 0;
     visibility: hidden;
     transition: var(--transition);
+    -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
   }
   
@@ -842,4 +847,3 @@
   
   /* Import Google Font - Poppins */
   @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
-  

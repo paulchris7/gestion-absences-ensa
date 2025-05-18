@@ -1,7 +1,15 @@
 <?php
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
 require_once 'config/db.php';
 require_once 'includes/auth.php';
+require_once 'lib/PHPMailer/vendor/autoload.php';
 
+$base_path = (strpos($_SERVER['PHP_SELF'], '/admin/') !== false || strpos($_SERVER['PHP_SELF'], '/etudiant/') !== false)
+    ? '../'
+    : '';
+    
 // Rediriger si déjà connecté
 redirect_if_logged_in();
 
@@ -10,6 +18,12 @@ $error = '';
 $success = '';
 $filieres = [];
 $modules = [];
+
+// Récupérer le message de succès s'il existe
+if (isset($_SESSION['success'])) {
+    $success = $_SESSION['success'];
+    unset($_SESSION['success']);
+}
 
 // Fonction de validation de photo
 function validatePhoto($file) {
@@ -60,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $filiere_id = (int)($_POST['filiere_id'] ?? 0);
-    $module_ids = array_map('intval', $_POST['module_ids'] ?? []);
+    $module_ids = isset($_POST['module_ids']) ? array_map('intval', $_POST['module_ids']) : [];
     
     // Validation des champs
     if (empty($apogee) || empty($nom) || empty($prenom) || empty($email) || empty($password) || $filiere_id <= 0 || empty($module_ids)) {
@@ -107,11 +121,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                         if (move_uploaded_file($_FILES['photo']['tmp_name'], $photoPath)) {
                             // Hachage du mot de passe
                             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                            
+
+                            // Génération du code de validation
+                            $code_activation = bin2hex(random_bytes(16)); // 32 caractères aléatoires
+
                             // Insertion de l'étudiant
                             $stmt = $pdo->prepare("
-                                INSERT INTO etudiants (apogee, nom, prenom, email, password, filiere_id, photo)
-                                VALUES (:apogee, :nom, :prenom, :email, :password, :filiere_id, :photo)
+                                INSERT INTO etudiants (apogee, nom, prenom, email, password, filiere_id, photo, code_activation)
+                                VALUES (:apogee, :nom, :prenom, :email, :password, :filiere_id, :photo, :code_activation)
                             ");
                             $stmt->execute([
                                 'apogee' => $apogee,
@@ -121,9 +138,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                                 'password' => $hashed_password,
                                 'filiere_id' => $filiere_id,
                                 'photo' => $photoPath,
+                                'code_activation' => $code_activation,
                             ]);
+
                             
                             $etudiant_id = $pdo->lastInsertId();
+
+                            $mail = new PHPMailer(true);
+
+                            // Envoi de l'e-mail de validation
+                            try {
+                                // Paramètres serveur SMTP
+                                $mail->isSMTP();
+                                $mail->Host       = 'smtp.gmail.com'; // ou autre : smtp.tonhebergeur.com
+                                $mail->SMTPAuth   = true;
+                                $mail->Username   = 'paulchristaimeslg3@gmail.com'; // ton e-mail
+                                $mail->Password   = 'qgzr zqvu rane yyvf'; // ton mot de passe ou mot de passe d'application
+                                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                                $mail->Port       = 587;
+
+                                // Expéditeur et destinataire
+                                $mail->setFrom('tonadresse@gmail.com', 'Gestion des absences');
+                                $mail->addAddress($email, "$prenom $nom"); // étudiant
+
+                                // Contenu de l'e-mail
+                                $mail->isHTML(true);
+                                $mail->Subject = 'Validation de votre inscription';
+                                $mail->Body    = "
+                                    <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;'>
+                                        <h2 style='color: #4361ee; text-align: center;'>Bienvenue, <strong>$prenom $nom</strong> !</h2>
+                                        <p style='font-size: 16px;'>Merci pour votre inscription. Pour activer votre compte, veuillez cliquer sur le bouton ci-dessous :</p>
+                                        <div style='text-align: center; margin: 20px 0;'>
+                                            <a href='{$base_path}validate.php?code=$code_activation' 
+                                               style='display: inline-block; padding: 12px 20px; font-size: 16px; color: #fff; background-color: #4361ee; text-decoration: none; border-radius: 5px;'>
+                                               Activer mon compte
+                                            </a>
+                                        </div>
+                                        <p style='font-size: 14px; color: #555;'>Si vous n'avez pas demandé cette inscription, ignorez ce message.</p>
+                                        <hr style='border: none; border-top: 1px solid #ddd; margin: 20px 0;'>
+                                        <p style='font-size: 12px; color: #888; text-align: center;'>--<br>L'équipe de gestion des absences</p>
+                                    </div>
+                                ";
+                                $mail->AltBody = "Bonjour $prenom $nom,\n\nVoici votre lien de validation : {$base_path}validate.php?code=$code_activation";
+
+                                $mail->send();
+                            } catch (Exception $e) {
+                                error_log("Erreur lors de l'envoi du mail : {$mail->ErrorInfo}");
+                            }
+
                             
                             // Inscription aux modules sélectionnés
                             $annee_universitaire = date('Y') . '-' . (date('Y') + 1);
@@ -141,9 +203,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             }
                             
                             $pdo->commit();
-                            $_SESSION['success'] = 'Inscription réussie ! Vous pouvez maintenant vous connecter.';
-                            header("Location: index.php");
-                            exit;
+                            $_SESSION['success'] = 'Inscription réussie ! Vous pouvez maintenant vous connecter après avoir validé votre email.';
+                            header("Location: {$base_path}index.php");
+                            exit();
                         } else {
                             $error = 'Erreur lors de l\'enregistrement de la photo.';
                             $pdo->rollBack();
@@ -155,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $error = 'Erreur lors de l\'inscription.';
+            $error = 'Erreur lors de l\'inscription: ' . $e->getMessage();
             error_log($e->getMessage());
         }
     }
@@ -172,7 +234,18 @@ include 'includes/header.php';
             <h2><i class="fas fa-user-plus"></i> Inscription Étudiant</h2>
         </div>
         <div class="card-body">
-            <!-- [Les messages d'erreur/succès restent au même endroit] -->
+            <!-- Messages d'erreur/succès -->
+            <?php if (!empty($error)): ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($error); ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (!empty($success)): ?>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success); ?>
+                </div>
+            <?php endif; ?>
             
             <form action="register.php" method="post" enctype="multipart/form-data">
                 <!-- Section informations personnelles -->
@@ -216,28 +289,56 @@ include 'includes/header.php';
                         <div class="card-body">
                             <div class="form-group">
                                 <label><strong>Semestre 1</strong></label>
-                                <?php foreach ($modules as $module): ?>
-                                    <?php if ($module['semestre'] === 'S1'): ?>
-                                    <div class="form-check">
-                                        <input type="checkbox" id="module_<?php echo htmlspecialchars($module['id']); ?>" name="module_ids[]" value="<?php echo htmlspecialchars($module['id']); ?>" 
-                                            <?php echo (isset($_POST['module_ids']) && in_array($module['id'], $_POST['module_ids'])) ? 'checked' : ''; ?>>
-                                        <label for="module_<?php echo htmlspecialchars($module['id']); ?>"><?php echo htmlspecialchars($module['code'] . ' - ' . $module['nom']); ?></label>
-                                    </div>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
+                                <?php 
+                                $hasSemestre1 = false;
+                                foreach ($modules as $module) {
+                                    if ($module['semestre'] === 'S1') {
+                                        $hasSemestre1 = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if ($hasSemestre1): 
+                                ?>
+                                    <?php foreach ($modules as $module): ?>
+                                        <?php if ($module['semestre'] === 'S1'): ?>
+                                        <div class="form-check">
+                                            <input type="checkbox" id="module_<?php echo htmlspecialchars($module['id']); ?>" name="module_ids[]" value="<?php echo htmlspecialchars($module['id']); ?>" 
+                                                <?php echo (isset($_POST['module_ids']) && in_array($module['id'], $_POST['module_ids'])) ? 'checked' : ''; ?>>
+                                            <label for="module_<?php echo htmlspecialchars($module['id']); ?>"><?php echo htmlspecialchars($module['code'] . ' - ' . $module['nom']); ?></label>
+                                        </div>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <p class="text-muted">Aucun module pour le semestre 1</p>
+                                <?php endif; ?>
                             </div>
                             
                             <div class="form-group">
                                 <label><strong>Semestre 2</strong></label>
-                                <?php foreach ($modules as $module): ?>
-                                    <?php if ($module['semestre'] === 'S2'): ?>
-                                    <div class="form-check">
-                                        <input type="checkbox" id="module_<?php echo htmlspecialchars($module['id']); ?>" name="module_ids[]" value="<?php echo htmlspecialchars($module['id']); ?>"
-                                            <?php echo (isset($_POST['module_ids']) && in_array($module['id'], $_POST['module_ids'])) ? 'checked' : ''; ?>>
-                                        <label for="module_<?php echo htmlspecialchars($module['id']); ?>"><?php echo htmlspecialchars($module['code'] . ' - ' . $module['nom']); ?></label>
-                                    </div>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
+                                <?php 
+                                $hasSemestre2 = false;
+                                foreach ($modules as $module) {
+                                    if ($module['semestre'] === 'S2') {
+                                        $hasSemestre2 = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if ($hasSemestre2): 
+                                ?>
+                                    <?php foreach ($modules as $module): ?>
+                                        <?php if ($module['semestre'] === 'S2'): ?>
+                                        <div class="form-check">
+                                            <input type="checkbox" id="module_<?php echo htmlspecialchars($module['id']); ?>" name="module_ids[]" value="<?php echo htmlspecialchars($module['id']); ?>"
+                                                <?php echo (isset($_POST['module_ids']) && in_array($module['id'], $_POST['module_ids'])) ? 'checked' : ''; ?>>
+                                            <label for="module_<?php echo htmlspecialchars($module['id']); ?>"><?php echo htmlspecialchars($module['code'] . ' - ' . $module['nom']); ?></label>
+                                        </div>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <p class="text-muted">Aucun module pour le semestre 2</p>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -275,7 +376,7 @@ include 'includes/header.php';
             
             <div class="text-center mt-20">
                 <p>Vous avez déjà un compte ?</p>
-                <a href="index.php" class="btn btn-secondary">
+                <a href="<?php echo $base_path; ?>index.php" class="btn btn-secondary">
                     <i class="fas fa-sign-in-alt"></i> Se connecter
                 </a>
             </div>
@@ -285,17 +386,51 @@ include 'includes/header.php';
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Événement pour soumettre le formulaire lors du changement de filière
         const filiereSelect = document.getElementById('filiere_id');
-        
-        filiereSelect.addEventListener('change', function() {
-            this.form.submit();
-        });
+        if (filiereSelect) {
+            filiereSelect.addEventListener('change', function() {
+                // Créer un formulaire temporaire pour soumettre uniquement la sélection de filière
+                const tempForm = document.createElement('form');
+                tempForm.method = 'POST';
+                tempForm.action = 'register.php';
+                
+                // Ajouter le champ filière_id
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'filiere_id';
+                input.value = this.value;
+                tempForm.appendChild(input);
+                
+                // Ajouter les autres champs du formulaire si nécessaire
+                const formInputs = document.querySelectorAll('form input:not([type="checkbox"]), form select');
+                formInputs.forEach(function(originalInput) {
+                    if (originalInput.name && originalInput.name !== 'filiere_id' && originalInput.name !== 'register') {
+                        const cloneInput = document.createElement('input');
+                        cloneInput.type = 'hidden';
+                        cloneInput.name = originalInput.name;
+                        cloneInput.value = originalInput.value;
+                        tempForm.appendChild(cloneInput);
+                    }
+                });
+                
+                // Soumettre le formulaire
+                document.body.appendChild(tempForm);
+                tempForm.submit();
+            });
+        }
 
         // Mise à jour du label du fichier photo
-        document.getElementById('photo').addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || 'Choisir un fichier';
-            document.querySelector('.custom-file-label').textContent = fileName;
-        });
+        const photoInput = document.getElementById('photo');
+        if (photoInput) {
+            photoInput.addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name || 'Choisir un fichier';
+                const fileLabel = document.querySelector('.custom-file-label');
+                if (fileLabel) {
+                    fileLabel.textContent = fileName;
+                }
+            });
+        }
     });
 </script>
 

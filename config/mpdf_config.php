@@ -1,5 +1,5 @@
 <?php
-require_once '../vendor/autoload.php';
+require_once '../lib/mpdf/vendor/autoload.php';
 
 function initMPDF() {
     $mpdf = new \Mpdf\Mpdf([

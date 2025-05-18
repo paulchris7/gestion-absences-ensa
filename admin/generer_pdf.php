@@ -19,18 +19,16 @@ try {
 
     // Requête pour récupérer les absences
     $absence_query = "
-        SELECT a.id, a.justifiee, a.date_enregistrement,
+        SELECT a.id, a.justifiee, a.date_enregistrement, a.justification_texte, a.justification_date,
                e.id as etudiant_id, e.apogee, e.nom as etudiant_nom, e.prenom as etudiant_prenom,
                s.id as seance_id, s.date_seance, s.heure_debut, s.heure_fin, s.type_seance, s.salle,
                m.id as module_id, m.code as module_code, m.nom as module_nom,
-               f.id as filiere_id, f.code as filiere_code, f.nom as filiere_nom,
-               j.id as justificatif_id, j.statut as justificatif_statut
+               f.id as filiere_id, f.code as filiere_code, f.nom as filiere_nom
         FROM absences a
         JOIN etudiants e ON a.etudiant_id = e.id
         JOIN seances s ON a.seance_id = s.id
         JOIN modules m ON s.module_id = m.id
         JOIN filieres f ON m.filiere_id = f.id
-        LEFT JOIN justificatifs j ON (j.etudiant_id = e.id AND j.module_id = m.id AND j.date_absence = s.date_seance)
         WHERE 1=1
     ";
     

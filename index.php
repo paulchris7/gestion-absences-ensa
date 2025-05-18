@@ -35,6 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
                 
                 if ($user && password_verify($password, $user['password'])) {
+                    // Vérifie si le compte étudiant est activé
+                    require_etudiant_active($user['id']);
+
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_type'] = 'etudiant';
                     $_SESSION['user_name'] = $user['prenom'] . ' ' . $user['nom'];

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS responsables_modules (
 ) ENGINE=InnoDB COMMENT='Table de liaison entre modules et responsables';
 
 -- Table des étudiants
+-- Table des étudiants (version avec activation de compte)
 CREATE TABLE IF NOT EXISTS etudiants (
     id INT AUTO_INCREMENT PRIMARY KEY,
     apogee VARCHAR(20) NOT NULL UNIQUE COMMENT 'Numéro Apogée (identifiant unique)',
@@ -71,10 +72,13 @@ CREATE TABLE IF NOT EXISTS etudiants (
     filiere_id INT NOT NULL COMMENT 'Filière principale de l\'étudiant',
     photo VARCHAR(255) COMMENT 'Chemin vers la photo de profil',
     date_inscription TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Date d\'inscription',
+    code_activation VARCHAR(100) DEFAULT NULL COMMENT 'Code unique pour activer le compte',
+    statut ENUM('actif', 'inactif') NOT NULL DEFAULT 'inactif' COMMENT 'État du compte étudiant',
     FOREIGN KEY (filiere_id) REFERENCES filieres(id),
     INDEX idx_etudiant_apogee (apogee),
     INDEX idx_etudiant_filiere (filiere_id)
 ) ENGINE=InnoDB;
+
 
 -- Table des inscriptions aux modules
 CREATE TABLE IF NOT EXISTS inscriptions_modules (
@@ -97,6 +101,7 @@ CREATE TABLE IF NOT EXISTS seances (
     heure_fin TIME NOT NULL COMMENT 'Heure de fin',
     type_seance ENUM('Cours', 'TD', 'TP') NOT NULL COMMENT 'Type de séance',
     salle VARCHAR(50) COMMENT 'Local où se déroule la séance',
+    qr_code VARCHAR(255) UNIQUE COMMENT 'QR code unique pour la séance',
     FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
     INDEX idx_seance_module (module_id),
     INDEX idx_seance_date (date_seance)
@@ -109,6 +114,8 @@ CREATE TABLE IF NOT EXISTS absences (
     seance_id INT NOT NULL COMMENT 'Séance concernée',
     justifiee BOOLEAN DEFAULT FALSE COMMENT 'Absence justifiée ou non',
     date_enregistrement TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Date d\'enregistrement',
+    justification_texte TEXT COMMENT 'Texte de justification fourni par l\'étudiant',
+    justification_date TIMESTAMP NULL COMMENT 'Date de soumission de la justification',
     FOREIGN KEY (etudiant_id) REFERENCES etudiants(id) ON DELETE CASCADE,
     FOREIGN KEY (seance_id) REFERENCES seances(id) ON DELETE CASCADE,
     UNIQUE KEY uniq_absence_etudiant_seance (etudiant_id, seance_id),
@@ -116,30 +123,42 @@ CREATE TABLE IF NOT EXISTS absences (
     INDEX idx_absence_seance (seance_id)
 ) ENGINE=InnoDB COMMENT='Enregistrement des absences des étudiants';
 
--- Table des justificatifs d'absence
+-- Nouvelle table pour enregistrer les présences via QR code
+CREATE TABLE IF NOT EXISTS presences (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    etudiant_id INT NOT NULL COMMENT 'Étudiant ayant scanné le QR code',
+    seance_id INT NOT NULL COMMENT 'Séance concernée',
+    date_presence TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Date et heure de la présence',
+    FOREIGN KEY (etudiant_id) REFERENCES etudiants(id) ON DELETE CASCADE,
+    FOREIGN KEY (seance_id) REFERENCES seances(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_presence_etudiant_seance (etudiant_id, seance_id),
+    INDEX idx_presence_seance (seance_id)
+) ENGINE=InnoDB COMMENT='Présences enregistrées via QR code';
+
+-- Nouvelle table pour gérer les justificatifs d'absence
 CREATE TABLE IF NOT EXISTS justificatifs (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    etudiant_id INT COMMENT 'Étudiant concerné',
-    module_id INT COMMENT 'Module concerné',
-    date_absence DATE COMMENT 'Date de l\'absence justifiée',
+    etudiant_id INT NOT NULL COMMENT 'Étudiant concerné',
+    seance_id INT NOT NULL COMMENT 'Séance concernée',
     fichier_path VARCHAR(255) COMMENT 'Chemin vers le fichier du justificatif',
     statut ENUM('en attente', 'accepté', 'rejeté') DEFAULT 'en attente' COMMENT 'Statut de validation',
-    FOREIGN KEY (etudiant_id) REFERENCES etudiants(id) ON DELETE SET NULL,
-    FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE SET NULL,
-    INDEX idx_justificatif_etudiant (etudiant_id),
+    date_soumission TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Date de soumission du justificatif',
+    FOREIGN KEY (etudiant_id) REFERENCES etudiants(id) ON DELETE CASCADE,
+    FOREIGN KEY (seance_id) REFERENCES seances(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_justificatif_etudiant_seance (etudiant_id, seance_id),
     INDEX idx_justificatif_statut (statut)
 ) ENGINE=InnoDB COMMENT='Justificatifs d\'absence soumis par les étudiants';
 
--- Table pour les QR Codes
+-- Nouvelle table pour enregistrer les QR codes générés pour les séances
 CREATE TABLE IF NOT EXISTS qr_codes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    etudiant_id INT NOT NULL COMMENT 'Étudiant concerné',
+    seance_id INT NOT NULL COMMENT 'Séance concernée',
     code_unique VARCHAR(255) NOT NULL UNIQUE COMMENT 'Valeur unique du QR Code',
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Date de génération',
-    FOREIGN KEY (etudiant_id) REFERENCES etudiants(id) ON DELETE CASCADE,
-    INDEX idx_qrcode_etudiant (etudiant_id),
+    FOREIGN KEY (seance_id) REFERENCES seances(id) ON DELETE CASCADE,
+    INDEX idx_qrcode_seance (seance_id),
     INDEX idx_qrcode_code (code_unique)
-) ENGINE=InnoDB COMMENT='Codes QR uniques pour chaque étudiant';
+) ENGINE=InnoDB COMMENT='QR codes uniques générés pour chaque séance';
 
 -- Insertion des données initiales
 
@@ -242,36 +261,36 @@ INSERT INTO responsables_modules (module_id, responsable_id) VALUES
 (31, 3), (32, 4), (33, 5), (34, 6), (35, 7), (36, 8);
 
 -- Étudiants
-INSERT INTO etudiants (apogee, nom, prenom, email, password, filiere_id) VALUES
+INSERT INTO etudiants (apogee, nom, prenom, email, password, filiere_id, code_activation, statut) VALUES
 -- GI
-('E10001', 'Alaoui', 'Mohammed', 'm.alaoui@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1),
-('E10002', 'Berrada', 'Fatima', 'f.berrada@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1),
-('E10003', 'Chraibi', 'Younes', 'y.chraibi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1),
+('E10001', 'Alaoui', 'Mohammed', 'm.alaoui@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1, '1234567890', 'actif'),
+('E10002', 'Berrada', 'Fatima', 'f.berrada@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1, '1234567890', 'actif'),
+('E10003', 'Chraibi', 'Younes', 'y.chraibi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 1, '1234567890', 'actif'),
 
 -- RSSP
-('E20001', 'Doukkali', 'Sanae', 's.doukkali@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2),
-('E20002', 'El Fassi', 'Ahmed', 'a.elfassi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2),
-('E20003', 'Fathi', 'Laila', 'l.fathi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2),
+('E20001', 'Doukkali', 'Sanae', 's.doukkali@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2, '1234567890', 'actif'),
+('E20002', 'El Fassi', 'Ahmed', 'a.elfassi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2, '1234567890', 'actif'),
+('E20003', 'Fathi', 'Laila', 'l.fathi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 2, '1234567890', 'actif'),
 
 -- GIL
-('E30001', 'Ghali', 'Omar', 'o.ghali@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3),
-('E30002', 'Hassani', 'Khadija', 'k.hassani@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3),
-('E30003', 'Idrissi', 'Rachid', 'r.idrissi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3),
+('E30001', 'Ghali', 'Omar', 'o.ghali@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3, '1234567890', 'actif'),
+('E30002', 'Hassani', 'Khadija', 'k.hassani@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3, '1234567890', 'actif'),
+('E30003', 'Idrissi', 'Rachid', 'r.idrissi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 3, '1234567890', 'actif'),
 
 -- GE
-('E40001', 'Jamal', 'Zineb', 'z.jamal@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4),
-('E40002', 'Khalil', 'Mehdi', 'm.khalil@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4),
-('E40003', 'Lamrani', 'Amina', 'a.lamrani@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4),
+('E40001', 'Jamal', 'Zineb', 'z.jamal@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4, '1234567890', 'actif'),
+('E40002', 'Khalil', 'Mehdi', 'm.khalil@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4, '1234567890', 'actif'),
+('E40003', 'Lamrani', 'Amina', 'a.lamrani@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 4, '1234567890', 'actif'),
 
 -- GM
-('E50001', 'Mansouri', 'Youssef', 'y.mansouri@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5),
-('E50002', 'Naciri', 'Samira', 's.naciri@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5),
-('E50003', 'Ouahabi', 'Karim', 'k.ouahabi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5),
+('E50001', 'Mansouri', 'Youssef', 'y.mansouri@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5, '1234567890', 'actif'),
+('E50002', 'Naciri', 'Samira', 's.naciri@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5, '1234567890', 'actif'),
+('E50003', 'Ouahabi', 'Karim', 'k.ouahabi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 5, '1234567890', 'actif'),
 
 -- GTR
-('E60001', 'Qasmi', 'Hassan', 'h.qasmi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6),
-('E60002', 'Rifi', 'Nadia', 'n.rifi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6),
-('E60003', 'Saadi', 'Imane', 'i.saadi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6);
+('E60001', 'Qasmi', 'Hassan', 'h.qasmi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6, '1234567890', 'actif'),
+('E60002', 'Rifi', 'Nadia', 'n.rifi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6, '1234567890', 'actif'),
+('E60003', 'Saadi', 'Imane', 'i.saadi@etud.ensa.ma', '$2y$10$NH7a6tVFdJjoxFYeMx2Sk.FuaSR3T.6brnG3osNT3iX/01ApXtt7e', 6, '1234567890', 'actif');
 
 -- Inscriptions aux modules
 INSERT INTO inscriptions_modules (etudiant_id, module_id, annee_universitaire) VALUES
@@ -487,58 +506,40 @@ INSERT INTO seances (module_id, date_seance, heure_debut, heure_fin, type_seance
 (36, '2024-03-14', '14:00:00', '16:00:00', 'Cours', 'J3'),
 (36, '2024-03-21', '14:00:00', '16:00:00', 'TP', 'K3');
 
--- Absences
-INSERT INTO absences (etudiant_id, seance_id, justifiee) VALUES
--- GI
-(1, 1, FALSE),
-(2, 3, TRUE),
+-- Mise à jour des QR codes pour les séances
+UPDATE seances
+SET qr_code = CONCAT('QR-', id, '-', DATE_FORMAT(date_seance, '%Y%m%d'), '-', TIME_FORMAT(heure_debut, '%H%i%s'))
+WHERE qr_code IS NULL;
 
--- RSSP
-(4, 19, FALSE),
-(5, 21, TRUE),
+-- Insertion des présences (exemple de données)
+INSERT INTO presences (etudiant_id, seance_id, date_presence) VALUES
+(1, 1, '2024-10-01 08:35:00'),
+(2, 2, '2024-10-02 10:50:00'),
+(3, 3, '2024-10-03 08:40:00'),
+(4, 7, '2024-10-01 14:05:00'),
+(5, 8, '2024-10-02 16:20:00');
 
--- GIL
-(7, 37, FALSE),
-(8, 39, TRUE),
+-- Mise à jour des absences (exemple de données)
+INSERT INTO absences (etudiant_id, seance_id, justifiee, justification_texte, justification_date) VALUES
+(1, 4, FALSE, NULL, NULL),
+(2, 5, TRUE, 'Maladie avec certificat médical.', '2024-10-10 09:00:00'),
+(3, 6, FALSE, NULL, NULL),
+(4, 10, TRUE, 'Problème familial urgent.', '2024-10-12 15:30:00'),
+(5, 11, FALSE, NULL, NULL);
 
--- GE
-(10, 55, FALSE),
-(11, 57, TRUE),
+-- Insertion des justificatifs (exemple de données)
+INSERT INTO justificatifs (etudiant_id, seance_id, fichier_path, statut, date_soumission) VALUES
+(2, 5, 'justificatifs/E10002/justif_2024-10-10.pdf', 'accepté', '2024-10-10 09:00:00'),
+(4, 10, 'justificatifs/E20004/justif_2024-10-12.pdf', 'accepté', '2024-10-12 15:30:00'),
+(3, 6, 'justificatifs/E10003/justif_2024-10-11.pdf', 'en attente', '2024-10-11 10:00:00'),
+(5, 11, 'justificatifs/E20005/justif_2024-10-13.pdf', 'rejeté', '2024-10-13 14:00:00');
 
--- GM
-(13, 73, FALSE),
-(14, 75, TRUE),
+-- Mise à jour des QR codes générés pour les séances (exemple de données)
+INSERT INTO qr_codes (seance_id, code_unique, date_creation) VALUES
+(1, 'QR-1-20241001-083000', '2024-09-30 12:00:00'),
+(2, 'QR-2-20241002-104500', '2024-09-30 12:00:00'),
+(3, 'QR-3-20241003-083000', '2024-09-30 12:00:00'),
+(4, 'QR-4-20241005-140000', '2024-09-30 12:00:00'),
+(5, 'QR-5-20241006-083000', '2024-09-30 12:00:00');
 
--- GTR
-(16, 91, FALSE),
-(17, 93, TRUE);
-
--- Justificatifs
-INSERT INTO justificatifs (etudiant_id, module_id, date_absence, fichier_path, statut) VALUES
-(2, 1, '2024-10-15', 'justificatifs/E10002/justif_2024-10-15.pdf', 'accepté'),
-(5, 7, '2024-10-16', 'justificatifs/E20002/justif_2024-10-16.pdf', 'accepté'),
-(8, 13, '2024-10-17', 'justificatifs/E30002/justif_2024-10-17.pdf', 'en attente'),
-(11, 19, '2024-10-18', 'justificatifs/E40002/justif_2024-10-18.pdf', 'accepté'),
-(14, 25, '2024-10-19', 'justificatifs/E50002/justif_2024-10-19.pdf', 'rejeté'),
-(17, 31, '2024-10-20', 'justificatifs/E60002/justif_2024-10-20.pdf', 'en attente');
-
--- QR Codes
-INSERT INTO qr_codes (etudiant_id, code_unique) VALUES
-(1, 'GI-E10001-2024-2025'),
-(2, 'GI-E10002-2024-2025'),
-(3, 'GI-E10003-2024-2025'),
-(4, 'RSSP-E20001-2024-2025'),
-(5, 'RSSP-E20002-2024-2025'),
-(6, 'RSSP-E20003-2024-2025'),
-(7, 'GIL-E30001-2024-2025'),
-(8, 'GIL-E30002-2024-2025'),
-(9, 'GIL-E30003-2024-2025'),
-(10, 'GE-E40001-2024-2025'),
-(11, 'GE-E40002-2024-2025'),
-(12, 'GE-E40003-2024-2025'),
-(13, 'GM-E50001-2024-2025'),
-(14, 'GM-E50002-2024-2025'),
-(15, 'GM-E50003-2024-2025'),
-(16, 'GTR-E60001-2024-2025'),
-(17, 'GTR-E60002-2024-2025'),
-(18, 'GTR-E60003-2024-2025');
+-- ...existing code...

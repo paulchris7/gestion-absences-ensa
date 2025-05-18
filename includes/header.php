@@ -30,16 +30,15 @@
                 <?php if(isset($_SESSION['user_type'])): ?>
                     <?php if($_SESSION['user_type'] === 'admin'): ?>
                         <ul>
-                            <li><a href="<?php echo $base_path; ?>dashboard_admin.php"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a></li>
                             <li><a href="<?php echo $base_path; ?>admin/gestion_filieres.php"><i class="fas fa-graduation-cap"></i> Filières</a></li>
                             <li><a href="<?php echo $base_path; ?>admin/gestion_modules.php"><i class="fas fa-book"></i> Modules</a></li>
                             <li><a href="<?php echo $base_path; ?>admin/gestion_etudiants.php"><i class="fas fa-user-graduate"></i> Étudiants</a></li>
                             <li><a href="<?php echo $base_path; ?>admin/gestion_absences.php"><i class="fas fa-calendar-times"></i> Absences</a></li>
+                            <li><a href="<?php echo $base_path; ?>admin/gestion_seances.php"><i class="fas fa-calendar-alt"></i> Séances</a></li>
                             <li><a href="<?php echo $base_path; ?>logout.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
                         </ul>
                     <?php else: ?>
                         <ul>
-                            <li><a href="<?php echo $base_path; ?>dashboard_etudiant.php"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a></li>
                             <li><a href="<?php echo $base_path; ?>etudiant/bilan_absences.php"><i class="fas fa-calendar-times"></i> Mes absences</a></li>
                             <li><a href="<?php echo $base_path; ?>logout.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
                         </ul>

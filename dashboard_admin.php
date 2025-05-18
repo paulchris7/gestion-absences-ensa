@@ -114,6 +114,9 @@ include 'includes/header.php';
             <a href="admin/gestion_absences.php" class="btn">
                 <i class="fas fa-calendar-times"></i> Gérer les absences
             </a>
+            <a href="admin/gestion_seances.php" class="btn">
+                <i class="fas fa-calendar-alt"></i> Gérer les séances
+            </a>
         </div>
     </div>
 </div>

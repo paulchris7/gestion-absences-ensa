@@ -38,18 +38,16 @@ try {
     
     // Charger les absences avec jointure optimisée
     $absence_query = "
-        SELECT a.id, a.justifiee, a.date_enregistrement,
+        SELECT a.id, a.justifiee, a.date_enregistrement, a.justification_texte, a.justification_date,
                e.id as etudiant_id, e.apogee, e.nom as etudiant_nom, e.prenom as etudiant_prenom,
                s.id as seance_id, s.date_seance, s.heure_debut, s.heure_fin, s.type_seance, s.salle,
                m.id as module_id, m.code as module_code, m.nom as module_nom,
-               f.id as filiere_id, f.code as filiere_code, f.nom as filiere_nom,
-               j.id as justificatif_id, j.fichier_path, j.statut as justificatif_statut
+               f.id as filiere_id, f.code as filiere_code, f.nom as filiere_nom
         FROM absences a
         JOIN etudiants e ON a.etudiant_id = e.id
         JOIN seances s ON a.seance_id = s.id
         JOIN modules m ON s.module_id = m.id
         JOIN filieres f ON m.filiere_id = f.id
-        LEFT JOIN justificatifs j ON (j.etudiant_id = e.id AND j.module_id = m.id AND j.date_absence = s.date_seance)
         WHERE 1=1
     ";
     
@@ -89,6 +87,39 @@ try {
 } catch (PDOException $e) {
     $_SESSION['error'] = 'Une erreur est survenue lors du chargement des données.';
     error_log("PDO Error in gestion_absences: " . $e->getMessage());
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['absence_id'], $_POST['justifiee'])) {
+    $absence_id = (int)$_POST['absence_id'];
+    $justifiee = (bool)$_POST['justifiee'];
+
+    try {
+        // Vérifier si un justificatif est disponible pour cette absence
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM justificatifs 
+            WHERE seance_id = (SELECT seance_id FROM absences WHERE id = ?) 
+              AND etudiant_id = (SELECT etudiant_id FROM absences WHERE id = ?)
+        ");
+        $stmt->execute([$absence_id, $absence_id]);
+        $has_justificatif = $stmt->fetchColumn() > 0;
+
+        if ($has_justificatif) {
+            // Mettre à jour le statut de l'absence
+            $stmt = $pdo->prepare("UPDATE absences SET justifiee = :justifiee WHERE id = :id");
+            $stmt->execute(['justifiee' => $justifiee, 'id' => $absence_id]);
+
+            $_SESSION['success'] = "Le statut de l'absence a été mis à jour avec succès.";
+        } else {
+            $_SESSION['error'] = "Impossible de mettre à jour le statut : aucun justificatif disponible.";
+        }
+    } catch (PDOException $e) {
+        $_SESSION['error'] = "Erreur lors de la mise à jour du statut de l'absence.";
+        error_log("PDO Error in gestion_absences: " . $e->getMessage());
+    }
+
+    header('Location: gestion_absences.php');
+    exit;
 }
 
 $page_title = "Gestion des absences";
@@ -192,6 +223,7 @@ include '../includes/header.php';
                             <th>Salle</th>
                             <th>Statut</th>
                             <th>Justificatif</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -223,6 +255,22 @@ include '../includes/header.php';
                                         </span>
                                     <?php else: ?>
                                         <em>Aucun</em>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (!empty($absence['justificatif_id'])): ?>
+                                        <form method="post" style="display: inline;">
+                                            <input type="hidden" name="absence_id" value="<?= $absence['id'] ?>">
+                                            <select name="justifiee" class="form-select" style="width: auto; display: inline-block;">
+                                                <option value="1" <?= $absence['justifiee'] ? 'selected' : '' ?>>Justifiée</option>
+                                                <option value="0" <?= !$absence['justifiee'] ? 'selected' : '' ?>>Non justifiée</option>
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-save"></i> Mettre à jour
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <em>Non modifiable</em>
                                     <?php endif; ?>
                                 </td>
                             </tr>
